@@ -36,6 +36,56 @@ class GameEngine {
         return parsed.toISOString().split('T')[0];
     }
 
+    cloneGameState(gameState) {
+        if (typeof structuredClone === 'function') {
+            return structuredClone(gameState);
+        }
+        return JSON.parse(JSON.stringify(gameState));
+    }
+
+    buildCorruptedSave(saveId, error) {
+        const message = error?.message || 'Save file is corrupted or incompatible.';
+        const now = new Date().toISOString();
+        return {
+            id: saveId,
+            name: 'Corrupted Save',
+            playerNationCode: null,
+            currentDate: null,
+            turnNumber: 0,
+            nations: {},
+            chats: [],
+            actions: [],
+            events: [
+                {
+                    id: Date.now().toString(),
+                    title: 'Save Corrupted',
+                    description: message,
+                    event_type: 'save_corrupted',
+                    severity: 'critical',
+                    affected_nations: [],
+                    state_changes: {},
+                    game_date: now.split('T')[0],
+                    created_at: now,
+                    turn_number: 0
+                }
+            ],
+            units: [],
+            history: [],
+            created_at: now,
+            error: {
+                type: 'save_corrupted',
+                message
+            }
+        };
+    }
+
+    isValidSave(gameState) {
+        if (!gameState || typeof gameState !== 'object') return false;
+        if (!gameState.playerNationCode || !gameState.currentDate) return false;
+        if (!gameState.nations || typeof gameState.nations !== 'object') return false;
+        return true;
+    }
+
     /**
      * Create a new game
      */
@@ -136,7 +186,15 @@ class GameEngine {
             throw new Error('Save not found');
         }
 
-        const gameState = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        let gameState;
+        try {
+            gameState = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        } catch (error) {
+            return this.buildCorruptedSave(saveId, error);
+        }
+        if (!this.isValidSave(gameState)) {
+            return this.buildCorruptedSave(saveId, new Error('Save file schema mismatch.'));
+        }
         const nations = this.getNations();
 
         return {
@@ -153,15 +211,32 @@ class GameEngine {
         const nations = this.getNations();
 
         return files.map(file => {
-            const data = JSON.parse(fs.readFileSync(path.join(savesDir, file), 'utf-8'));
-            return {
-                id: data.id,
-                name: data.name,
-                nation_code: data.playerNationCode,
-                nation_name: nations[data.playerNationCode]?.name || 'Unknown',
-                current_date: data.currentDate,
-                updated_at: data.created_at
-            };
+            const filePath = path.join(savesDir, file);
+            try {
+                const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+                if (!this.isValidSave(data)) {
+                    throw new Error('Save file schema mismatch.');
+                }
+                return {
+                    id: data.id,
+                    name: data.name,
+                    nation_code: data.playerNationCode,
+                    nation_name: nations[data.playerNationCode]?.name || 'Unknown',
+                    current_date: data.currentDate,
+                    updated_at: data.created_at
+                };
+            } catch (error) {
+                const fallbackId = path.basename(file, '.json');
+                return {
+                    id: fallbackId,
+                    name: 'Corrupted Save',
+                    nation_code: null,
+                    nation_name: 'Corrupted Save',
+                    current_date: null,
+                    updated_at: null,
+                    error: 'save_corrupted'
+                };
+            }
         });
     }
 
@@ -223,6 +298,7 @@ class GameEngine {
     async advanceTime(saveId, timeJump) {
         const gameState = await this.loadGame(saveId);
         const currentDate = new Date(gameState.currentDate);
+        const updatedGameState = this.cloneGameState(gameState);
 
         // 1. Prepare AI Context
         const pendingActions = (gameState.actions || []).filter(a => a.status === 'pending');
@@ -252,17 +328,17 @@ class GameEngine {
                 const newEvent = {
                     ...event,
                     id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
-                    game_date: gameState.currentDate,
+                    game_date: updatedGameState.currentDate,
                     created_at: new Date().toISOString(),
-                    turn_number: gameState.turnNumber
+                    turn_number: updatedGameState.turnNumber
                 };
-                gameState.events.push(newEvent);
+                updatedGameState.events.push(newEvent);
 
                 // Apply state changes from event to nations
                 if (event.state_changes) {
                     Object.keys(event.state_changes).forEach(nationCode => {
                         const changes = event.state_changes[nationCode];
-                        const nationState = gameState.nations[nationCode.toUpperCase()];
+                        const nationState = updatedGameState.nations[nationCode.toUpperCase()];
                         if (nationState) {
                             if (changes.stability) nationState.stability = Math.max(0, Math.min(100, (nationState.stability || 70) + changes.stability));
                             if (changes.war_support) nationState.warSupport = Math.max(0, Math.min(100, (nationState.warSupport || 20) + changes.war_support));
@@ -278,22 +354,22 @@ class GameEngine {
 
         // 4. Update Game Date and Turn
         const nextDate = this.calculateNewDate(currentDate, timeJump);
-        gameState.currentDate = nextDate.toISOString().split('T')[0];
-        gameState.turnNumber += 1;
+        updatedGameState.currentDate = nextDate.toISOString().split('T')[0];
+        updatedGameState.turnNumber += 1;
 
         // 5. Mark pending actions as completed
         pendingActions.forEach(a => {
-            const action = gameState.actions.find(act => act.id === a.id);
+            const action = updatedGameState.actions.find(act => act.id === a.id);
             if (action) action.status = 'completed';
         });
 
         // 6. Save and Return
-        this.saveGame(saveId, gameState);
+        this.saveGame(saveId, updatedGameState);
 
         return {
             previous_date: currentDate.toISOString().split('T')[0],
-            new_date: gameState.currentDate,
-            turn_number: gameState.turnNumber,
+            new_date: updatedGameState.currentDate,
+            turn_number: updatedGameState.turnNumber,
             events: aiResult.events || [],
             processed_actions: pendingActions.length
         };

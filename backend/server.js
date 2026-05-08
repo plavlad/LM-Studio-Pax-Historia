@@ -19,6 +19,34 @@ const unitsRouter = require('./routes/units');
 const app = express();
 const server = http.createServer(app);
 
+function getLlmModelsUrl() {
+    const baseUrl = process.env.LLM_API_URL;
+    if (!baseUrl) return null;
+    let normalized = baseUrl;
+    if (normalized.includes('/api/v1')) {
+        // Keep as is
+    } else if (!normalized.endsWith('/v1')) {
+        normalized = normalized.replace(/\/$/, '') + '/v1';
+    }
+    return `${normalized.replace(/\/$/, '')}/models`;
+}
+
+async function validateLlmApi() {
+    const modelsUrl = getLlmModelsUrl();
+    if (!modelsUrl) {
+        console.error('[Startup] LLM_API_URL is not set. Configure it to reach your local LLM (e.g. http://127.0.0.1:1234/v1).');
+        return;
+    }
+    try {
+        const response = await fetch(modelsUrl, { method: 'GET' });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+    } catch (error) {
+        console.error(`[Startup] LLM API not reachable at ${modelsUrl}. Start LM Studio/Ollama and set LLM_API_URL accordingly.`);
+    }
+}
+
 // WebSocket server for real-time updates
 const wss = new WebSocket.Server({ server });
 
@@ -101,6 +129,7 @@ server.listen(PORT, () => {
 ║  LLM API: ${process.env.LLM_API_URL || 'http://127.0.0.1:1234/v1'}        ║
 ╚══════════════════════════════════════════════════════════╝
     `);
+    validateLlmApi();
 });
 
 // Graceful shutdown
