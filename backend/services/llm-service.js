@@ -12,13 +12,14 @@ if (baseURL) {
     }
 } else {
     console.error('[LLM] LLM_API_URL is not set. Configure it in your environment.');
-    baseURL = '';
 }
 
-const openai = new OpenAI({
-    baseURL: baseURL,
-    apiKey: 'lm-studio'
-});
+const openai = baseURL
+    ? new OpenAI({
+        baseURL: baseURL,
+        apiKey: 'lm-studio'
+    })
+    : null;
 
 // System prompts for different contexts
 const PROMPTS = {
@@ -258,6 +259,16 @@ Rispondi SOLO in JSON conforme al formato richiesto.`
         }
     ];
 
+    if (!openai) {
+        return {
+            events: [],
+            error: {
+                type: 'llm_config_missing',
+                message: 'LLM_API_URL is not set.'
+            }
+        };
+    }
+
     try {
         const response = await openai.chat.completions.create({
             model: process.env.LLM_MODEL || 'qwen3-vl-8b',
@@ -323,6 +334,10 @@ async function diplomaticChat(message, fromNation, toNation, chatHistory = [], c
         { role: 'user', content: message }
     ];
 
+    if (!openai) {
+        return '[Communication Error: LLM_API_URL is not set]';
+    }
+
     try {
         const response = await openai.chat.completions.create({
             model: process.env.LLM_MODEL || 'qwen3-vl-8b',
@@ -371,6 +386,10 @@ ${JSON.stringify(advContext.pendingActions, null, 2)}
 DOMANDA DEL SOVRANO: "${question}"`
         }
     ];
+
+    if (!openai) {
+        return 'Errore consigliere: LLM_API_URL is not set';
+    }
 
     try {
         const response = await openai.chat.completions.create({
