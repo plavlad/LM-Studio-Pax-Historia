@@ -3,8 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Initialize OpenAI client pointing to LM Studio
-const configuredBaseUrl = process.env.LLM_API_URL;
-let baseURL = configuredBaseUrl;
+let baseURL = process.env.LLM_API_URL;
 if (baseURL) {
     if (baseURL.includes('/api/v1')) {
         // Keep it as is
