@@ -37,13 +37,18 @@ async function validateLlmApi() {
         console.error('[Startup] LLM_API_URL is not set. Configure it to reach your local LLM (e.g. http://127.0.0.1:1234/v1).');
         return;
     }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
     try {
-        const response = await fetch(modelsUrl, { method: 'GET' });
+        const response = await fetch(modelsUrl, { method: 'GET', signal: controller.signal });
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
     } catch (error) {
-        console.error(`[Startup] LLM API not reachable at ${modelsUrl}. Start LM Studio/Ollama and set LLM_API_URL accordingly.`);
+        const reason = error.name === 'AbortError' ? 'Request timed out' : error.message;
+        console.error(`[Startup] LLM API not reachable at ${modelsUrl} (${reason}). Start LM Studio/Ollama and set LLM_API_URL accordingly.`);
+    } finally {
+        clearTimeout(timeout);
     }
 }
 

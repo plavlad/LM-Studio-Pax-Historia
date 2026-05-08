@@ -135,7 +135,11 @@ function stripMarkdownFences(content) {
 
 function parseJsonResponse(content) {
     const stripped = stripMarkdownFences(content);
+    const hasLeadingPlus = /:\s*\+(\d+(\.\d*)?)/.test(stripped);
     const normalized = stripped.replace(/:\s*\+(\d+(\.\d*)?)/g, ': $1');
+    if (hasLeadingPlus) {
+        console.warn('[LLM] Normalized JSON by removing leading "+" signs.');
+    }
     try {
         return { data: JSON.parse(normalized) };
     } catch (error) {
