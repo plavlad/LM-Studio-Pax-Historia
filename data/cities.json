@@ -5,8 +5,8 @@
         "nation_code": "ITA",
         "type": "capital",
         "coords": [
-            740,
-            240
+            41.9028,
+            12.4964
         ]
     },
     {
@@ -15,8 +15,8 @@
         "nation_code": "ITA",
         "type": "major_city",
         "coords": [
-            710,
-            160
+            45.4642,
+            9.1900
         ]
     },
     {
@@ -25,8 +25,8 @@
         "nation_code": "GER",
         "type": "capital",
         "coords": [
-            750,
-            120
+            52.5200,
+            13.4050
         ]
     },
     {
@@ -35,8 +35,8 @@
         "nation_code": "FRA",
         "type": "capital",
         "coords": [
-            660,
-            150
+            48.8566,
+            2.3522
         ]
     },
     {
@@ -45,8 +45,8 @@
         "nation_code": "ENG",
         "type": "capital",
         "coords": [
-            640,
-            125
+            51.5074,
+            -0.1278
         ]
     },
     {
@@ -55,8 +55,8 @@
         "nation_code": "ETH",
         "type": "capital",
         "coords": [
-            880,
-            480
+            8.9806,
+            38.7578
         ]
     },
     {
@@ -65,8 +65,8 @@
         "nation_code": "SOV",
         "type": "capital",
         "coords": [
-            880,
-            100
+            55.7558,
+            37.6173
         ]
     },
     {
@@ -75,8 +75,8 @@
         "nation_code": "JAP",
         "type": "capital",
         "coords": [
-            1330,
-            220
+            35.6762,
+            139.6503
         ]
     },
     {
@@ -85,8 +85,8 @@
         "nation_code": "CHI",
         "type": "capital",
         "coords": [
-            1160,
-            225
+            32.0603,
+            118.7969
         ]
     }
 ]

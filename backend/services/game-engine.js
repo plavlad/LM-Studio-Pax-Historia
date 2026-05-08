@@ -4,6 +4,8 @@ const llmService = require('./llm-service');
 
 const savesDir = path.join(__dirname, '../../data/saves');
 const nationsPath = path.join(__dirname, '../../data/nations_v2.json');
+const START_DATE_RANGE = { min: '2000-01-01', max: '2024-12-31' };
+const DEFAULT_START_DATE = '2024-01-01';
 
 /**
  * Game Engine - File-based game logic for Pax Historia
@@ -22,12 +24,25 @@ class GameEngine {
         return {};
     }
 
+    normalizeStartDate(startDate) {
+        if (!startDate) return DEFAULT_START_DATE;
+        const parsed = new Date(startDate);
+        if (Number.isNaN(parsed.getTime())) return DEFAULT_START_DATE;
+
+        const minDate = new Date(START_DATE_RANGE.min);
+        const maxDate = new Date(START_DATE_RANGE.max);
+        if (parsed < minDate || parsed > maxDate) return DEFAULT_START_DATE;
+
+        return parsed.toISOString().split('T')[0];
+    }
+
     /**
      * Create a new game
      */
-    async createGame(playerNationCode, startDate = '1936-01-01') {
+    async createGame(playerNationCode, startDate = DEFAULT_START_DATE) {
         const nations = this.getNations();
         const playerNation = nations[playerNationCode];
+        const normalizedStartDate = this.normalizeStartDate(startDate);
 
         if (!playerNation) {
             throw new Error(`Nation ${playerNationCode} not found`);
@@ -36,9 +51,9 @@ class GameEngine {
         const saveId = Date.now().toString();
         const gameState = {
             id: saveId,
-            name: `${playerNation.name} - ${startDate}`,
+            name: `${playerNation.name} - ${normalizedStartDate}`,
             playerNationCode: playerNationCode,
-            currentDate: startDate,
+            currentDate: normalizedStartDate,
             turnNumber: 1,
             nations: {},
             chats: [],
@@ -47,7 +62,7 @@ class GameEngine {
             units: [],
             history: [],
             created_at: new Date().toISOString(),
-            world_context: "Historical 1936 start. Europe is on the brink of tension as ideologies clash.",
+            world_context: "Modern 2024 start. A multipolar world faces great-power rivalry, regional wars, and rapid technological shifts.",
             simulation_rules: "1. Realistic consequences. 2. Diplomatic weight. 3. Historical plausibility with player flexibility."
         };
 
@@ -75,7 +90,7 @@ class GameEngine {
         return {
             save_id: saveId,
             player_nation: playerNation,
-            current_date: startDate,
+            current_date: normalizedStartDate,
             turn_number: 1
         };
     }
