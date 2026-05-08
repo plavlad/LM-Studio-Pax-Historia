@@ -3,17 +3,23 @@ const fs = require('fs');
 const path = require('path');
 
 // Initialize OpenAI client pointing to LM Studio
-let baseURL = process.env.LLM_API_URL || 'http://127.0.0.1:1234/v1';
-if (baseURL.includes('/api/v1')) {
-    // Keep it as is
-} else if (!baseURL.endsWith('/v1')) {
-    baseURL = baseURL.replace(/\/$/, '') + '/v1';
+let baseURL = process.env.LLM_API_URL;
+if (baseURL) {
+    if (baseURL.includes('/api/v1')) {
+        // Keep it as is
+    } else if (!baseURL.endsWith('/v1')) {
+        baseURL = baseURL.replace(/\/$/, '') + '/v1';
+    }
+} else {
+    console.error('[LLM] LLM_API_URL is not set. Configure it in your environment.');
 }
 
-const openai = new OpenAI({
-    baseURL: baseURL,
-    apiKey: 'lm-studio'
-});
+const openai = baseURL
+    ? new OpenAI({
+        baseURL: baseURL,
+        apiKey: 'lm-studio'
+    })
+    : null;
 
 // System prompts for different contexts
 const PROMPTS = {
@@ -115,9 +121,51 @@ Simulation Rules:
 Current Event History:
 {event_history}
 
-Responding as: {responding_polity_name}`
+    Responding as: {responding_polity_name}`
 };
 
+function stripMarkdownFences(content) {
+    if (!content) return '';
+    const fenceMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenceMatch) {
+        return fenceMatch[1].trim();
+    }
+    return content.trim();
+}
+
+function parseJsonResponse(content) {
+    const stripped = stripMarkdownFences(content);
+    const hasLeadingPlus = /:\s*\+(\d+(\.\d*)?)/.test(stripped);
+    const normalized = stripped.replace(/:\s*\+(\d+(\.\d*)?)/g, ': $1');
+    if (hasLeadingPlus) {
+        console.warn('[LLM] Normalized JSON by removing leading "+" signs.');
+    }
+    try {
+        return { data: JSON.parse(normalized) };
+    } catch (error) {
+        const jsonMatch = normalized.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            try {
+                return { data: JSON.parse(jsonMatch[0]) };
+            } catch (innerError) {
+                return {
+                    error: {
+                        type: 'invalid_json',
+                        message: innerError.message,
+                        raw: normalized
+                    }
+                };
+            }
+        }
+        return {
+            error: {
+                type: 'invalid_json',
+                message: error.message,
+                raw: normalized
+            }
+        };
+    }
+}
 
 /**
  * Load historical roadmap from file
@@ -213,6 +261,16 @@ Rispondi SOLO in JSON conforme al formato richiesto.`
         }
     ];
 
+    if (!openai) {
+        return {
+            events: [],
+            error: {
+                type: 'llm_config_missing',
+                message: 'LLM_API_URL is not set.'
+            }
+        };
+    }
+
     try {
         const response = await openai.chat.completions.create({
             model: process.env.LLM_MODEL || 'qwen3-vl-8b',
@@ -232,29 +290,20 @@ Rispondi SOLO in JSON conforme al formato richiesto.`
             console.warn('[LLM] Failed to save debug log:', e.message);
         }
 
-        // Clean markdown if present
-        if (content.includes('```json')) {
-            content = content.split('```json')[1].split('```')[0];
-        } else if (content.includes('```')) {
-            content = content.split('```')[1].split('```')[0];
+        const parsed = parseJsonResponse(content);
+        if (parsed.error) {
+            return { events: [], error: parsed.error };
         }
-
-        // Fix common AI JSON errors: leading '+' signs on numbers
-        content = content.replace(/:\s*\+(\d+(\.\d*)?)/g, ': $1');
-
-        try {
-            return JSON.parse(content);
-        } catch (e) {
-            // Robust regex fallback if JSON.parse fails
-            const jsonMatch = content.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                return JSON.parse(jsonMatch[0]);
-            }
-            throw e;
-        }
+        return parsed.data;
     } catch (error) {
         console.error('Event Generation Error:', error);
-        return { events: [], error: error.message };
+        return {
+            events: [],
+            error: {
+                type: 'llm_request_failed',
+                message: error.message
+            }
+        };
     }
 }
 
@@ -286,6 +335,10 @@ async function diplomaticChat(message, fromNation, toNation, chatHistory = [], c
         })),
         { role: 'user', content: message }
     ];
+
+    if (!openai) {
+        return '[Communication Error: LLM_API_URL is not set]';
+    }
 
     try {
         const response = await openai.chat.completions.create({
@@ -335,6 +388,10 @@ ${JSON.stringify(advContext.pendingActions, null, 2)}
 DOMANDA DEL SOVRANO: "${question}"`
         }
     ];
+
+    if (!openai) {
+        return 'Errore consigliere: LLM_API_URL is not set';
+    }
 
     try {
         const response = await openai.chat.completions.create({
