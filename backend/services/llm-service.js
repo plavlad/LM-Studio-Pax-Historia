@@ -126,13 +126,11 @@ Current Event History:
 
 function stripMarkdownFences(content) {
     if (!content) return '';
-    let cleaned = content;
-    if (cleaned.includes('```json')) {
-        cleaned = cleaned.split('```json')[1].split('```')[0];
-    } else if (cleaned.includes('```')) {
-        cleaned = cleaned.split('```')[1].split('```')[0];
+    const fenceMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenceMatch) {
+        return fenceMatch[1].trim();
     }
-    return cleaned.trim();
+    return content.trim();
 }
 
 function parseJsonResponse(content) {
